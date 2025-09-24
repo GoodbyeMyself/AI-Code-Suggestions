@@ -67,19 +67,17 @@
         .added-code-decoration {
             background-color: rgba(76, 175, 80, 0.25);
             border-right: 2px solid #4caf50;
-            animation: slideInGreen 0.5s ease-out;
+            animation: slideInGreen 0s ease-out;
         }
 
         @keyframes slideInGreen {
             from {
-                opacity: 0;
-                background-color: rgba(76, 175, 80, 0.4);
-                transform: translateX(-10px);
+                background-color: rgba(76, 175, 80, 0.5);
+                border-right: 3px solid #4caf50;
             }
             to {
-                opacity: 1;
-                background-color: rgba(76, 175, 80, 0.2);
-                transform: translateX(0);
+                background-color: rgba(76, 175, 80, 0.25);
+                border-right: 2px solid #4caf50;
             }
         }
 
@@ -258,7 +256,10 @@ function processOrder(order) {
                 model.getLineMaxColumn(suggestion.range.startLineNumber + newCodeLines - 1)
             );
 
-            // 5. 高亮新添加的代码
+            // 5. 立即滚动到变更位置确保可见
+            editor.revealRangeInCenter(newRange, monaco.editor.ScrollType.Smooth);
+
+            // 6. 高亮新添加的代码
             const addedDecoration = editor.deltaDecorations([], [{
                 range: newRange,
                 options: {
@@ -268,10 +269,15 @@ function processOrder(order) {
                 }
             }]);
 
-            // 6. 更新建议的范围信息以适应新代码
+            // 7. 强制立即重绘编辑器以确保装饰立即显示
+            setTimeout(() => {
+                editor.render(true);
+            }, 0);
+
+            // 8. 更新建议的范围信息以适应新代码
             suggestion.newRange = newRange;
 
-            // 7. 保存装饰ID和建议数据
+            // 9. 保存装饰ID和建议数据
             decorationIds.push(...addedDecoration);
             suggestions.push(suggestion);
 
