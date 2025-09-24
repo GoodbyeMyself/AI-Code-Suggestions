@@ -84,13 +84,18 @@
         /* 建议按钮样式 */
         .suggestion-buttons {
             position: absolute;
-            top: 2px;
-            right: 8px;
+            bottom: -2px;
+            right: var(--button-offset-right, 4px); /* 可自定义的右偏移量 */
             display: flex;
-            gap: 4px;
+            flex-direction: row !important;
+            flex-wrap: nowrap;
+            gap: 6px;
             z-index: 1000;
             opacity: 0;
             transition: opacity 0.2s ease;
+            transform: translateY(100%);
+            align-items: center;
+            justify-content: flex-end;
         }
 
         .suggestion-buttons.visible {
@@ -100,17 +105,20 @@
         .suggestion-btn {
             background: rgba(30, 30, 30, 0.95);
             border: 1px solid #666;
-            border-radius: 3px;
-            padding: 2px 6px;
-            font-size: 11px;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
             cursor: pointer;
             color: #fff;
             transition: all 0.2s ease;
-            min-width: 20px;
-            height: 18px;
-            display: flex;
+            min-width: auto;
+            height: auto;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
+            white-space: nowrap;
+            font-weight: 500;
+            flex-shrink: 0;
         }
 
         .suggestion-btn:hover {
@@ -145,14 +153,14 @@
         
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div class="controls">
-                <button onclick="addSuggestion()" title="Apply AI suggestion directly">
+                <button onclick="addSuggestion()" title="每次生成两个AI建议">
                     🤖 生成 AI 建议
                 </button>
-                <button onclick="acceptSuggestions()" title="Accept AI suggestions - delete red code, keep green code">
-                    🗑️ 接受建议
+                <button onclick="acceptSuggestions()" title="接受所有AI建议 - 删除标红代码，保留绿色代码">
+                    ✅ 接受所有建议
                 </button>
-                <button onclick="resetCode()" title="Reset to initial code">
-                    🔄 拒绝建议
+                <button onclick="resetCode()" title="拒绝所有建议，恢复到初始代码">
+                    🔄 重置代码
                 </button>
             </div>
         </div>
@@ -167,7 +175,6 @@
         let viewZoneIds = [];
         let suggestionWidgets = []; // 存储建议的控件
         let initialCode = ''; // 将从外部文件加载
-        let suggestionExamples = []; // 将从外部文件加载
 
         // 异步加载初始代码
         async function loadInitialCode() {
@@ -193,8 +200,7 @@
                 
                 // 检查是否成功加载
                 if (window.suggestionExamples && Array.isArray(window.suggestionExamples)) {
-                    suggestionExamples = [...window.suggestionExamples];
-                    console.log(`Loaded ${suggestionExamples.length} suggestion examples`);
+                    console.log(`Loaded ${window.suggestionExamples.length} suggestion examples`);
                 } else {
                     console.error('Failed to load suggestion examples from config file');
                 }
@@ -240,21 +246,60 @@
             });
         });
 
-        // 添加 AI 建议 - 简化版本，直接应用修改
+        // 添加 AI 建议 - 简化版本，每次固定生成两个建议
         function addSuggestion() {
-            if (suggestionExamples.length === 0) {
-                alert('No more suggestions available');
+            // 从配置中随机选择两个不同的建议
+            const availableSuggestions = [...window.suggestionExamples || []];
+            if (availableSuggestions.length === 0) {
+                alert('No suggestions configured');
                 return;
             }
 
-            const suggestion = suggestionExamples.shift();
-            const suggestionId = Date.now();
-            suggestion.id = suggestionId; // 添加唯一ID
+            // 随机选择两个不同的建议
+            const numSuggestions = 2;
+            const selectedSuggestions = [];
             
-            console.log('Applying AI suggestion with ID:', suggestionId, suggestion);
+            for (let i = 0; i < numSuggestions && availableSuggestions.length > 0; i++) {
+                const randomIndex = Math.floor(Math.random() * availableSuggestions.length);
+                const suggestion = availableSuggestions.splice(randomIndex, 1)[0];
+                const suggestionId = Date.now() + i; // 确保每个建议都有唯一ID
+                suggestion.id = suggestionId;
+                selectedSuggestions.push(suggestion);
+                
+                console.log('Selected AI suggestion with ID:', suggestionId, suggestion);
+            }
 
-            // 直接应用建议，显示差异
-            applySuggestionWithDiff(suggestion);
+            console.log(`Applying ${selectedSuggestions.length} AI suggestions simultaneously`);
+
+            // 按照行号排序，确保从上到下应用（避免行号偏移问题）
+            selectedSuggestions.sort((a, b) => a.range.startLineNumber - b.range.startLineNumber);
+
+            // 逐个应用建议，但需要调整后续建议的行号
+            let lineOffset = 0;
+            selectedSuggestions.forEach((suggestion, index) => {
+                // 调整建议的行号以补偿之前的修改
+                const adjustedSuggestion = {
+                    ...suggestion,
+                    range: {
+                        ...suggestion.range,
+                        startLineNumber: suggestion.range.startLineNumber + lineOffset,
+                        endLineNumber: suggestion.range.endLineNumber + lineOffset
+                    }
+                };
+
+                // 应用建议并计算行数变化
+                const linesBefore = suggestion.oldCode.split('\n').length;
+                const linesAfter = suggestion.newCode.split('\n').length;
+                const lineDelta = linesAfter - linesBefore;
+                
+                // 应用建议
+                applySuggestionWithDiff(adjustedSuggestion);
+                
+                // 更新偏移量，影响后续建议的行号
+                lineOffset += lineDelta;
+            });
+
+            console.log(`Successfully applied ${selectedSuggestions.length} suggestions`);
         }
 
         // 应用建议并显示差异 - 新版本，标红代码不占行号
@@ -357,15 +402,13 @@
                     // 接受按钮
                     const acceptBtn = document.createElement('button');
                     acceptBtn.className = 'suggestion-btn accept';
-                    acceptBtn.innerHTML = '✓';
-                    acceptBtn.title = '接受此建议';
+                    acceptBtn.innerHTML = '✓ 接受此建议';
                     acceptBtn.onclick = () => acceptIndividualSuggestion(suggestion.id);
                     
                     // 拒绝按钮
                     const rejectBtn = document.createElement('button');
                     rejectBtn.className = 'suggestion-btn reject';
-                    rejectBtn.innerHTML = '✕';
-                    rejectBtn.title = '拒绝此建议';
+                    rejectBtn.innerHTML = '✕ 拒绝此建议';
                     rejectBtn.onclick = () => rejectIndividualSuggestion(suggestion.id);
                     
                     buttonsContainer.appendChild(acceptBtn);
@@ -376,10 +419,10 @@
                 getPosition: function() {
                     return {
                         position: {
-                            lineNumber: range.startLineNumber,
+                            lineNumber: range.endLineNumber,
                             column: range.endColumn
                         },
-                        preference: [monaco.editor.ContentWidgetPositionPreference.EXACT]
+                        preference: [monaco.editor.ContentWidgetPositionPreference.BELOW]
                     };
                 }
             };
