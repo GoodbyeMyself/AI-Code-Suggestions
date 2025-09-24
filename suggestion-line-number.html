@@ -136,21 +136,33 @@ const sampleData = [
         // AI建议的新代码片段 - 适配保留原代码模式
         const suggestionExamples = [
             {
-                range: { startLineNumber: 1, startColumn: 1, endLineNumber: 8, endColumn: 1 },
-                oldCode: `function calculateTotal(items) {
-    let total = 0;
-    for (let i = 0; i < items.length; i++) {
-        total += items[i].price;
-    }
+                range: { startLineNumber: 9, startColumn: 1, endLineNumber: 14, endColumn: 1 },
+                oldCode: `function processOrder(order) {
+    const total = calculateTotal(order.items);
+    console.log("Order total: " + total);
     return total;
 }`,
-                newCode: `// ✨ AI建议：使用现代函数式编程方法
-function calculateTotal(items) {
-    return items.reduce((total, item) => total + (item.price || 0), 0);
+                newCode: `// ✨ AI建议：增强错误处理和日志记录
+function processOrder(order) {
+    if (!order || !order.items || !Array.isArray(order.items)) {
+        throw new Error('Invalid order: missing or invalid items array');
+    }
+    
+    const total = calculateTotal(order.items);
+    console.log(\`Order processed successfully. Total: $\${total.toFixed(2)}\`);
+    
+    // 记录订单处理信息
+    console.log(\`Order contains \${order.items.length} items\`);
+    
+    return {
+        total: total,
+        itemCount: order.items.length,
+        processedAt: new Date().toISOString()
+    };
 }`,
-                description: "Modernize with functional approach",
-                confidence: 0.95,
-                tags: ["refactor", "es6", "performance"]
+                description: "Add error handling and enhanced logging",
+                confidence: 0.92,
+                tags: ["error-handling", "logging", "robustness"]
             }
         ];
 
