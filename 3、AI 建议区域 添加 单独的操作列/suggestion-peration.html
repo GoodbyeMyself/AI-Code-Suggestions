@@ -296,6 +296,8 @@
 
             // 逐个应用建议，但需要调整后续建议的行号
             let lineOffset = 0;
+            let firstSuggestionRange = null;
+            
             selectedSuggestions.forEach((suggestion, index) => {
                 // 调整建议的行号以补偿之前的修改
                 const adjustedSuggestion = {
@@ -304,8 +306,18 @@
                         ...suggestion.range,
                         startLineNumber: suggestion.range.startLineNumber + lineOffset,
                         endLineNumber: suggestion.range.endLineNumber + lineOffset
-                    }
+                    },
+                    // 除了第一个建议，其他建议都不滚动
+                    shouldScroll: false
                 };
+
+                // 记录第一个建议的位置（调整后的位置）
+                if (index === 0) {
+                    firstSuggestionRange = {
+                        startLineNumber: adjustedSuggestion.range.startLineNumber,
+                        endLineNumber: adjustedSuggestion.range.endLineNumber
+                    };
+                }
 
                 // 应用建议并计算行数变化
                 const linesBefore = suggestion.oldCode.split('\n').length;
@@ -318,6 +330,18 @@
                 // 更新偏移量，影响后续建议的行号
                 lineOffset += lineDelta;
             });
+            
+            // 应用完所有建议后，滚动到第一个建议位置
+            if (firstSuggestionRange) {
+                const model = editor.getModel();
+                const firstSuggestionNewRange = new monaco.Range(
+                    firstSuggestionRange.startLineNumber,
+                    1,
+                    firstSuggestionRange.startLineNumber,
+                    model.getLineMaxColumn(firstSuggestionRange.startLineNumber)
+                );
+                editor.revealRangeInCenter(firstSuggestionNewRange, monaco.editor.ScrollType.Smooth);
+            }
 
             console.log(`Successfully applied ${selectedSuggestions.length} fixed suggestions`);
         }
@@ -335,20 +359,22 @@
             ));
             suggestion.originalCode = originalCode;
             
-            // 2. 先添加视觉区域显示被删除的代码（在原代码位置上方，不占用实际行号）
-            const deletedViewZone = {
-                afterLineNumber: suggestion.range.startLineNumber - 1,
-                heightInLines: originalCode.split('\n').length,
-                domNode: createDeletedCodeNode(originalCode),
-                suppressMouseDown: true
-            };
-
+            // 2. 只有当原代码不为空时，才添加视觉区域显示被删除的代码（在原代码位置上方，不占用实际行号）
             let currentViewZoneId;
-            editor.changeViewZones(function(changeAccessor) {
-                currentViewZoneId = changeAccessor.addZone(deletedViewZone);
-                viewZoneIds.push(currentViewZoneId);
-            });
-            suggestion.viewZoneId = currentViewZoneId;
+            if (originalCode.trim() !== '') {
+                const deletedViewZone = {
+                    afterLineNumber: suggestion.range.startLineNumber - 1,
+                    heightInLines: originalCode.split('\n').length,
+                    domNode: createDeletedCodeNode(originalCode),
+                    suppressMouseDown: true
+                };
+
+                editor.changeViewZones(function(changeAccessor) {
+                    currentViewZoneId = changeAccessor.addZone(deletedViewZone);
+                    viewZoneIds.push(currentViewZoneId);
+                });
+                suggestion.viewZoneId = currentViewZoneId;
+            }
 
             // 3. 直接替换原代码为新代码
             const edits = [{
@@ -372,8 +398,10 @@
                 model.getLineMaxColumn(suggestion.range.startLineNumber + newCodeLines - 1)
             );
 
-            // 5. 立即滚动到变更位置确保可见
-            editor.revealRangeInCenter(newRange, monaco.editor.ScrollType.Smooth);
+            // 5. 立即滚动到变更位置确保可见 (如果需要滚动)
+            if (suggestion.shouldScroll !== false) {
+                editor.revealRangeInCenter(newRange, monaco.editor.ScrollType.Smooth);
+            }
 
             // 6. 高亮新添加的代码
             const addedDecoration = editor.deltaDecorations([], [{
