@@ -2,6 +2,12 @@
 
 一个基于 Monaco Editor 的智能代码建议演示系统，支持多段代码同时建议、个性化接受/拒绝功能和批量处理操作。
 
+## 🎯 演示效果
+
+![AI 代码建议系统演示](https://github.com/GoodbyeMyself/AI-Code-Suggestions/blob/main/demo.png?raw=true)
+
+*上图展示了系统的核心功能：智能代码建议生成、差异对比显示、单个建议控制按钮以及底部批量处理装饰器*
+
 ## 📁 文件结构
 
 ```
