@@ -87,7 +87,7 @@ function processOrder(order) {
     }
     return result;
 }`,
-        newCode: ``,
+        newCode: `// 删除 filterActiveItems 函数：推荐使用原生 filter 方法`,
         description: "删除 filterActiveItems 函数：推荐使用原生 filter 方法",
         confidence: 0.85,
         tags: ["cleanup", "modern-js", "simplification"],
