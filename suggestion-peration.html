@@ -86,16 +86,11 @@
             position: absolute;
             bottom: -2px;
             right: var(--button-offset-right, 4px); /* 可自定义的右偏移量 */
-            display: flex;
-            flex-direction: row !important;
-            flex-wrap: nowrap;
-            gap: 6px;
             z-index: 1000;
             opacity: 0;
             transition: opacity 0.2s ease;
             transform: translateY(100%);
-            align-items: center;
-            justify-content: flex-end;
+            width: 900px;
         }
 
         .suggestion-buttons.visible {
@@ -110,15 +105,7 @@
             font-size: 12px;
             cursor: pointer;
             color: #fff;
-            transition: all 0.2s ease;
-            min-width: auto;
-            height: auto;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            white-space: nowrap;
-            font-weight: 500;
-            flex-shrink: 0;
+            float: right;
         }
 
         .suggestion-btn:hover {
@@ -420,7 +407,7 @@
                     return {
                         position: {
                             lineNumber: range.endLineNumber,
-                            column: range.endColumn
+                            // column: range.endColumn
                         },
                         preference: [monaco.editor.ContentWidgetPositionPreference.BELOW]
                     };
