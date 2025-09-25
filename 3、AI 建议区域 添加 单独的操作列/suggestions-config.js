@@ -92,6 +92,51 @@ function processOrder(order) {
         confidence: 0.85,
         tags: ["cleanup", "modern-js", "simplification"],
     },
+    // 建议4：在示例数据之间插入数据处理函数
+    {
+        range: {
+            startLineNumber: 78,
+            startColumn: 1,
+            endLineNumber: 78,
+            endColumn: 1,
+        },
+        oldCode: ``,
+        newCode: `
+// ✨ AI建议：添加数据操作和统计函数
+function getActiveUsers() {
+    return sampleUsers.filter(user => user.active);
+}
+
+function getProductStats() {
+    const activeProducts = sampleProducts.filter(product => product.active);
+    const totalValue = activeProducts.reduce((sum, product) => sum + product.price, 0);
+    
+    return {
+        totalProducts: sampleProducts.length,
+        activeProducts: activeProducts.length,
+        averagePrice: totalValue / activeProducts.length,
+        totalValue: totalValue
+    };
+}
+
+function generateUserReport() {
+    const activeUsers = getActiveUsers();
+    const stats = getProductStats();
+    
+    console.log(\`用户报告: \${activeUsers.length} 个活跃用户，共 \${stats.activeProducts} 个可用商品\`);
+    console.log(\`商品平均价格: $\${stats.averagePrice.toFixed(2)}\`);
+    
+    return {
+        activeUserCount: activeUsers.length,
+        productStats: stats,
+        generatedAt: new Date().toISOString()
+    };
+}
+`,
+        description: "在示例数据之间插入数据处理函数：提供用户和商品的统计分析功能",
+        confidence: 0.92,
+        tags: ["data-processing", "statistics", "enhancement", "functional"],
+    },
 ];
 
 // 导出配置（支持ES6模块和CommonJS）
