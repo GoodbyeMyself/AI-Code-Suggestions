@@ -218,15 +218,10 @@
 
         // 更新所有现有建议按钮宽度的方法
         function updateAllSuggestionButtonsWidth() {
-            // 更新 ContentWidget 中的建议按钮
-            const suggestionButtons = document.querySelectorAll('.suggestion-buttons:not(.viewzone-buttons)');
+            // --
+            const suggestionButtons = document.querySelectorAll('.suggestion-buttons');
+            // --
             suggestionButtons.forEach(button => {
-                setSuggestionButtonWidth(button);
-            });
-            
-            // 更新 viewzone 中的建议按钮
-            const viewzoneButtons = document.querySelectorAll('.suggestion-buttons.viewzone-buttons');
-            viewzoneButtons.forEach(button => {
                 setSuggestionButtonWidth(button);
             });
         }
@@ -299,38 +294,29 @@
             // 按照行号排序，确保从上到下应用（避免行号偏移问题）
             selectedSuggestions.sort((a, b) => a.range.startLineNumber - b.range.startLineNumber);
 
-            // 逐个应用建议，需要正确计算行号偏移
-            let cumulativeLineOffset = 0;
+            // 逐个应用建议，但需要调整后续建议的行号
+            let lineOffset = 0;
             selectedSuggestions.forEach((suggestion, index) => {
-                console.log(`\nApplying suggestion ${index + 1}: ${suggestion.description}`);
-                console.log(`Original range: ${suggestion.range.startLineNumber}-${suggestion.range.endLineNumber}`);
-                console.log(`Cumulative offset: ${cumulativeLineOffset}`);
-                
-                // 调整建议的行号以补偿之前所有修改的累积偏移
+                // 调整建议的行号以补偿之前的修改
                 const adjustedSuggestion = {
                     ...suggestion,
                     range: {
                         ...suggestion.range,
-                        startLineNumber: suggestion.range.startLineNumber + cumulativeLineOffset,
-                        endLineNumber: suggestion.range.endLineNumber + cumulativeLineOffset
+                        startLineNumber: suggestion.range.startLineNumber + lineOffset,
+                        endLineNumber: suggestion.range.endLineNumber + lineOffset
                     }
                 };
 
-                console.log(`Adjusted range: ${adjustedSuggestion.range.startLineNumber}-${adjustedSuggestion.range.endLineNumber}`);
-
-                // 计算当前建议的行数变化
+                // 应用建议并计算行数变化
                 const linesBefore = suggestion.oldCode.split('\n').length;
-                const linesAfter = suggestion.newCode.trim() === '' ? 0 : suggestion.newCode.split('\n').length;
-                const currentLineDelta = linesAfter - linesBefore;
-                
-                console.log(`Lines before: ${linesBefore}, Lines after: ${linesAfter}, Delta: ${currentLineDelta}`);
+                const linesAfter = suggestion.newCode.split('\n').length;
+                const lineDelta = linesAfter - linesBefore;
                 
                 // 应用建议
                 applySuggestionWithDiff(adjustedSuggestion);
                 
-                // 累积偏移量，影响后续所有建议的行号
-                cumulativeLineOffset += currentLineDelta;
-                console.log(`New cumulative offset: ${cumulativeLineOffset}`);
+                // 更新偏移量，影响后续建议的行号
+                lineOffset += lineDelta;
             });
 
             console.log(`Successfully applied ${selectedSuggestions.length} fixed suggestions`);
@@ -353,7 +339,7 @@
             const deletedViewZone = {
                 afterLineNumber: suggestion.range.startLineNumber - 1,
                 heightInLines: originalCode.split('\n').length,
-                domNode: createDeletedCodeNode(originalCode, suggestion),
+                domNode: createDeletedCodeNode(originalCode),
                 suppressMouseDown: true
             };
 
@@ -365,101 +351,43 @@
             suggestion.viewZoneId = currentViewZoneId;
 
             // 3. 直接替换原代码为新代码
-            let newRange;
-            if (suggestion.newCode.trim() === '') {
-                // 对于完全删除的情况，需要删除整个范围包括换行符
-                // 检查是否需要删除额外的换行符
-                const totalLines = model.getLineCount();
-                let deleteRange;
-                
-                if (suggestion.range.endLineNumber < totalLines) {
-                    // 不是最后一行，删除到下一行的开始（包含换行符）
-                    deleteRange = new monaco.Range(
-                        suggestion.range.startLineNumber,
-                        1,
-                        suggestion.range.endLineNumber + 1,
-                        1
-                    );
-                } else {
-                    // 是最后一行，只删除到行尾
-                    deleteRange = new monaco.Range(
-                        suggestion.range.startLineNumber,
-                        1,
-                        suggestion.range.endLineNumber,
-                        model.getLineMaxColumn(suggestion.range.endLineNumber)
-                    );
-                    
-                    // 如果不是第一行，还需要删除前面的换行符
-                    if (suggestion.range.startLineNumber > 1) {
-                        deleteRange = new monaco.Range(
-                            suggestion.range.startLineNumber - 1,
-                            model.getLineMaxColumn(suggestion.range.startLineNumber - 1),
-                            suggestion.range.endLineNumber,
-                            model.getLineMaxColumn(suggestion.range.endLineNumber)
-                        );
-                    }
-                }
-                
-                const edits = [{
-                    range: deleteRange,
-                    text: ''
-                }];
-                editor.executeEdits('ai-suggestion', edits);
-                
-                // 删除操作不需要新的范围，使用一个最小范围用于按钮定位
-                newRange = new monaco.Range(
-                    Math.max(1, suggestion.range.startLineNumber - 1),
-                    1,
-                    Math.max(1, suggestion.range.startLineNumber - 1),
-                    1
-                );
-            } else {
-                // 正常替换操作
-                const edits = [{
-                    range: new monaco.Range(
-                        suggestion.range.startLineNumber,
-                        suggestion.range.startColumn,
-                        suggestion.range.endLineNumber,
-                        suggestion.range.endColumn
-                    ),
-                    text: suggestion.newCode
-                }];
-                editor.executeEdits('ai-suggestion', edits);
-                
-                // 4. 计算新代码的行范围
-                const newCodeLines = suggestion.newCode.split('\n').length;
-                newRange = new monaco.Range(
+            const edits = [{
+                range: new monaco.Range(
                     suggestion.range.startLineNumber,
-                    1,
-                    suggestion.range.startLineNumber + newCodeLines - 1,
-                    model.getLineMaxColumn(suggestion.range.startLineNumber + newCodeLines - 1)
-                );
-            }
+                    suggestion.range.startColumn,
+                    suggestion.range.endLineNumber,
+                    suggestion.range.endColumn
+                ),
+                text: suggestion.newCode
+            }];
+
+            editor.executeEdits('ai-suggestion', edits);
+
+            // 4. 计算新代码的行范围
+            const newCodeLines = suggestion.newCode.split('\n').length;
+            const newRange = new monaco.Range(
+                suggestion.range.startLineNumber,
+                1,
+                suggestion.range.startLineNumber + newCodeLines - 1,
+                model.getLineMaxColumn(suggestion.range.startLineNumber + newCodeLines - 1)
+            );
 
             // 5. 立即滚动到变更位置确保可见
             editor.revealRangeInCenter(newRange, monaco.editor.ScrollType.Smooth);
 
-            // 6. 高亮新添加的代码（删除操作不需要高亮）
-            let addedDecoration = [];
-            if (suggestion.newCode.trim() !== '') {
-                addedDecoration = editor.deltaDecorations([], [{
-                    range: newRange,
-                    options: {
-                        className: 'added-code-decoration',
-                        isWholeLine: true,
-                        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-                    }
-                }]);
-            }
+            // 6. 高亮新添加的代码
+            const addedDecoration = editor.deltaDecorations([], [{
+                range: newRange,
+                options: {
+                    className: 'added-code-decoration',
+                    isWholeLine: true,
+                    stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                }
+            }]);
 
-            // 7. 创建建议控制按钮（仅对非删除操作）
-            let buttonsWidget = null;
-            if (suggestion.newCode.trim() !== '') {
-                // 非删除操作：使用 ContentWidget
-                buttonsWidget = createSuggestionButtonsWidget(suggestion, newRange, false);
-                editor.addContentWidget(buttonsWidget);
-            }
-            // 删除操作的按钮已经直接嵌入到 viewzone 的 DOM 节点中
+            // 7. 创建建议控制按钮
+            const buttonsWidget = createSuggestionButtonsWidget(suggestion, newRange);
+            editor.addContentWidget(buttonsWidget);
 
             // 8. 强制立即重绘编辑器以确保装饰立即显示
             setTimeout(() => {
@@ -469,20 +397,18 @@
             // 9. 更新建议的范围信息以适应新代码
             suggestion.newRange = newRange;
             suggestion.decorationIds = addedDecoration;
-            suggestion.widgetId = buttonsWidget ? buttonsWidget.getId() : null;
+            suggestion.widgetId = buttonsWidget.getId();
 
             // 10. 保存装饰ID、建议数据和控件
             decorationIds.push(...addedDecoration);
             suggestions.push(suggestion);
-            if (buttonsWidget) {
-                suggestionWidgets.push(buttonsWidget);
-            }
+            suggestionWidgets.push(buttonsWidget);
 
             console.log(`Applied suggestion: ${suggestion.description} - Replaced code directly, showing deleted code in view zone above`);
         }
 
         // 创建建议按钮控件
-        function createSuggestionButtonsWidget(suggestion, range, isDeleteOperation = false) {
+        function createSuggestionButtonsWidget(suggestion, range) {
             const widgetId = `suggestion-buttons-${suggestion.id}`;
             
             return {
@@ -526,7 +452,7 @@
         }
 
         // 创建显示被删除代码的DOM节点
-        function createDeletedCodeNode(deletedCode, suggestion) {
+        function createDeletedCodeNode(deletedCode) {
             const node = document.createElement('div');
             
             // 获取编辑器的字体配置
@@ -541,11 +467,12 @@
                 line-height: ${lineHeight}px;
                 font-family: ${fontFamily};
                 color: #fff;
+                opacity: 0.7;
                 white-space: pre;
+                overflow: hidden;
                 padding: 0;
                 margin: 0;
                 padding-left: 4px;
-                position: relative;
             `;
             
             // 创建代码容器，使用Monaco的语法高亮样式
@@ -565,38 +492,6 @@
             // 直接显示被删除的代码
             codeContainer.textContent = deletedCode;
             node.appendChild(codeContainer);
-            
-            // 如果是纯删除操作，在viewzone底部添加操作按钮
-            if (suggestion && suggestion.newCode.trim() === '') {
-                const buttonsContainer = document.createElement('div');
-                buttonsContainer.className = 'suggestion-buttons visible viewzone-buttons';
-                // 添加唯一标识，便于后续宽度更新
-                buttonsContainer.setAttribute('data-suggestion-id', suggestion.id);
-                buttonsContainer.style.cssText = `
-                    position: absolute;
-                    bottom: 0px;
-                    right: 20px;
-                    z-index: 1000;
-                    opacity: 1;
-                    width: ${getEditorWidth() - 200}px;
-                `;
-                
-                // 接受按钮
-                const acceptBtn = document.createElement('button');
-                acceptBtn.className = 'suggestion-btn accept';
-                acceptBtn.innerHTML = '✓ 接受此建议';
-                acceptBtn.onclick = () => acceptIndividualSuggestion(suggestion.id);
-                
-                // 拒绝按钮
-                const rejectBtn = document.createElement('button');
-                rejectBtn.className = 'suggestion-btn reject';
-                rejectBtn.innerHTML = '✕ 拒绝此建议';
-                rejectBtn.onclick = () => rejectIndividualSuggestion(suggestion.id);
-                
-                buttonsContainer.appendChild(acceptBtn);
-                buttonsContainer.appendChild(rejectBtn);
-                node.appendChild(buttonsContainer);
-            }
             
             return node;
         }
