@@ -9,7 +9,7 @@
     <style>
         body {
             margin: 0;
-            padding: 20px;
+            padding: 12px 20px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #1e1e1e;
             color: #ffffff;
@@ -21,7 +21,8 @@
 
         h1 {
             color: #ffffff;
-            margin-bottom: 20px;
+            margin: 0;
+            margin-bottom: 12px;
         }
 
         #editor-container {
@@ -29,10 +30,11 @@
             border: 1px solid #3e3e3e;
             border-radius: 4px;
             overflow: hidden;
+            position: relative; /* 为批处理装饰器提供相对定位基准 */
         }
 
         .controls {
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
 
         button {
@@ -118,12 +120,72 @@
         }
 
         .suggestion-btn.reject {
-            background: rgba(244, 67, 54, 0.8);
-            border-color: #f44336;
+            background: rgba(120, 120, 120, 0.8);
+            border-color: #888;
         }
 
         .suggestion-btn.reject:hover {
-            background: rgba(244, 67, 54, 1);
+            background: rgba(140, 140, 140, 1);
+        }
+
+        /* 批处理装饰器样式 */
+        .batch-decorator {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 30, 30, 0.95);
+            padding: 6px 0px;
+            display: flex;
+            gap: 12px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: auto; /* 确保按钮可以点击 */
+            border-radius: 8px;
+            width: 280px;
+            justify-content: center;
+        }
+
+        .batch-decorator.visible {
+            opacity: 1;
+        }
+
+        .batch-btn {
+            background: rgba(60, 60, 60, 0.9);
+            border: 1px solid #888;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #fff;
+            line-height: 16px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            margin-right: 0;
+        }
+
+        .batch-btn:hover {
+            background: rgba(80, 80, 80, 0.9);
+            border-color: #aaa;
+        }
+
+        .batch-btn.accept-all {
+            background: rgba(76, 175, 80, 0.8);
+            border-color: #4caf50;
+        }
+
+        .batch-btn.accept-all:hover {
+            background: rgba(76, 175, 80, 1);
+        }
+
+        .batch-btn.reject-all {
+            background: rgba(120, 120, 120, 0.8);
+            border-color: #888;
+        }
+
+        .batch-btn.reject-all:hover {
+            background: rgba(140, 140, 140, 1);
         }
 
     </style>
@@ -133,15 +195,12 @@
     <div class="container">
         <h1>Monaco Editor - AI Code Suggestions Demo</h1>
         
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
             <div class="controls">
                 <button onclick="addSuggestion()">
                     🤖 AI 建议
                 </button>
-                <button onclick="acceptSuggestions()">
-                    ✅ 接受所有建议
-                </button>
-                <button onclick="resetCode()">
+                <button onclick="rejectAllSuggestions()">
                     🔄 重置代码
                 </button>
             </div>
@@ -156,6 +215,7 @@
         let decorationIds = [];
         let viewZoneIds = [];
         let suggestionWidgets = []; // 存储建议的控件
+        let batchDecorator = null; // 批处理装饰器控件
         let initialCode = ''; // 将从外部文件加载
 
         // 异步加载初始代码
@@ -285,11 +345,7 @@
                 const suggestionId = Date.now() + index; // 确保每个建议都有唯一ID
                 suggestion.id = suggestionId;
                 selectedSuggestions.push(suggestion);
-                
-                console.log('Selected fixed AI suggestion with ID:', suggestionId, suggestion.description);
             });
-
-            console.log(`Applying ${selectedSuggestions.length} fixed AI suggestions simultaneously`);
 
             // 按照行号排序，确保从上到下应用（避免行号偏移问题）
             selectedSuggestions.sort((a, b) => a.range.startLineNumber - b.range.startLineNumber);
@@ -342,8 +398,9 @@
                 );
                 editor.revealRangeInCenter(firstSuggestionNewRange, monaco.editor.ScrollType.Smooth);
             }
-
-            console.log(`Successfully applied ${selectedSuggestions.length} fixed suggestions`);
+            
+            // 显示批处理装饰器
+            showBatchDecorator();
         }
 
         // 应用建议并显示差异 - 新版本，标红代码不占行号
@@ -431,8 +488,6 @@
             decorationIds.push(...addedDecoration);
             suggestions.push(suggestion);
             suggestionWidgets.push(buttonsWidget);
-
-            console.log(`Applied suggestion: ${suggestion.description} - Replaced code directly, showing deleted code in view zone above`);
         }
 
         // 创建建议按钮控件
@@ -477,6 +532,70 @@
                     };
                 }
             };
+        }
+
+        // 创建批处理装饰器DOM元素
+        function createBatchDecoratorDOM() {
+            const decoratorContainer = document.createElement('div');
+            decoratorContainer.className = 'batch-decorator';
+            decoratorContainer.id = 'batch-decorator-element';
+            
+            // 接受全部建议按钮
+            const acceptAllBtn = document.createElement('button');
+            acceptAllBtn.className = 'batch-btn accept-all';
+            acceptAllBtn.innerHTML = '✓ 接受全部建议';
+            acceptAllBtn.onclick = () => {
+                acceptSuggestions();
+                hideBatchDecorator();
+            };
+            
+            // 拒绝全部建议按钮
+            const rejectAllBtn = document.createElement('button');
+            rejectAllBtn.className = 'batch-btn reject-all';
+            rejectAllBtn.innerHTML = '✕ 拒绝全部建议';
+            rejectAllBtn.onclick = () => {
+                rejectAllSuggestions();
+                hideBatchDecorator();
+            };
+            
+            decoratorContainer.appendChild(rejectAllBtn);
+            decoratorContainer.appendChild(acceptAllBtn);
+            
+            return decoratorContainer;
+        }
+
+        // 显示批处理装饰器
+        function showBatchDecorator() {
+            if (!batchDecorator && suggestions.length > 0) {
+                // 创建装饰器DOM元素
+                batchDecorator = createBatchDecoratorDOM();
+                
+                // 将装饰器添加到编辑器容器中
+                const editorContainer = document.getElementById('editor-container');
+                if (editorContainer) {
+                    editorContainer.appendChild(batchDecorator);
+                    
+                    // 延迟显示动画
+                    setTimeout(() => {
+                        batchDecorator.classList.add('visible');
+                    }, 10);
+                }
+            }
+        }
+
+        // 隐藏批处理装饰器
+        function hideBatchDecorator() {
+            if (batchDecorator) {
+                batchDecorator.classList.remove('visible');
+                
+                // 延迟移除DOM元素以完成动画
+                setTimeout(() => {
+                    if (batchDecorator && batchDecorator.parentNode) {
+                        batchDecorator.parentNode.removeChild(batchDecorator);
+                        batchDecorator = null;
+                    }
+                }, 300);
+            }
         }
 
         // 创建显示被删除代码的DOM节点
@@ -563,7 +682,10 @@
             // 4. 从建议列表中移除
             suggestions.splice(suggestionIndex, 1);
             
-            console.log(`Accepted individual suggestion: ${suggestion.description}`);
+            // 5. 如果没有更多建议，隐藏批处理装饰器
+            if (suggestions.length === 0) {
+                hideBatchDecorator();
+            }
         }
 
         // 拒绝单个建议
@@ -614,7 +736,10 @@
             // 5. 从建议列表中移除
             suggestions.splice(suggestionIndex, 1);
             
-            console.log(`Rejected individual suggestion: ${suggestion.description}`);
+            // 6. 如果没有更多建议，隐藏批处理装饰器
+            if (suggestions.length === 0) {
+                hideBatchDecorator();
+            }
         }
 
         // 接受所有 AI 建议 - 清理装饰和视觉区域，保留已替换的代码
@@ -627,12 +752,10 @@
             // 逐个接受所有建议
             const suggestionIds = suggestions.map(s => s.id);
             suggestionIds.forEach(id => acceptIndividualSuggestion(id));
-            
-            console.log('Accepted all AI suggestions');
         }
         
         // 拒绝所有建议 - 恢复到初始代码
-        function resetCode() {
+        function rejectAllSuggestions() {
             // 1. 清理所有装饰
             if (decorationIds.length > 0) {
                 editor.deltaDecorations(decorationIds, []);
@@ -652,22 +775,21 @@
                 editor.removeContentWidget(widget);
             });
             
-            // 4. 恢复到初始代码
+            // 4. 隐藏批处理装饰器
+            hideBatchDecorator();
+            
+            // 5. 恢复到初始代码
             editor.setValue(initialCode);
             
-            // 5. 清理变量状态
+            // 6. 清理变量状态
             suggestions = [];
             decorationIds = [];
             viewZoneIds = [];
             suggestionWidgets = [];
-            
-            console.log('Rejected all AI suggestions: restored original code');
         }
 
         // 确保函数在全局作用域中可访问
         window.addSuggestion = addSuggestion;
-        window.acceptSuggestions = acceptSuggestions;
-        window.resetCode = resetCode;
     </script>
 </body>
 
