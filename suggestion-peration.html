@@ -16,7 +16,6 @@
         }
 
         .container {
-            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -26,7 +25,7 @@
         }
 
         #editor-container {
-            height: 500px;
+            height: 700px;
             border: 1px solid #3e3e3e;
             border-radius: 4px;
             overflow: hidden;
@@ -90,7 +89,7 @@
             opacity: 0;
             transition: opacity 0.2s ease;
             transform: translateY(100%);
-            width: 900px;
+            /* width will be set dynamically via JavaScript */
         }
 
         .suggestion-buttons.visible {
@@ -101,16 +100,12 @@
             background: rgba(30, 30, 30, 0.95);
             border: 1px solid #666;
             border-radius: 4px;
-            padding: 4px 8px;
+            padding: 2px 4px;
             font-size: 12px;
             cursor: pointer;
             color: #fff;
             float: right;
-        }
-
-        .suggestion-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            line-height: 16px;
         }
 
         .suggestion-btn.accept {
@@ -196,6 +191,41 @@
             }
         }
 
+        // 获取编辑器宽度的辅助函数
+        function getEditorWidth() {
+            if (!editor) return 900; // 默认宽度作为后备
+            
+            const editorContainer = document.getElementById('editor-container');
+            if (editorContainer) {
+                return editorContainer.offsetWidth;
+            }
+            
+            // 如果无法获取容器宽度，尝试从编辑器本身获取
+            const editorDomNode = editor.getDomNode();
+            if (editorDomNode) {
+                return editorDomNode.offsetWidth;
+            }
+            
+            return 900; // 默认后备宽度
+        }
+
+        // 统一设置建议按钮宽度的方法
+        function setSuggestionButtonWidth(buttonElement) {
+            if (buttonElement) {
+                buttonElement.style.width = (getEditorWidth() - 200) + 'px';
+            }
+        }
+
+        // 更新所有现有建议按钮宽度的方法
+        function updateAllSuggestionButtonsWidth() {
+            // --
+            const suggestionButtons = document.querySelectorAll('.suggestion-buttons');
+            // --
+            suggestionButtons.forEach(button => {
+                setSuggestionButtonWidth(button);
+            });
+        }
+
         // 初始化 Monaco Editor
         require.config({
             paths: {
@@ -230,6 +260,12 @@
                 console.log('All configurations loaded successfully');
             }).catch(error => {
                 console.error('Failed to load configurations:', error);
+            });
+            
+            // 添加编辑器布局变化监听器，动态更新建议按钮宽度
+            editor.onDidLayoutChange(function() {
+                // 更新所有现有的建议按钮宽度
+                updateAllSuggestionButtonsWidth();
             });
         });
 
@@ -385,6 +421,9 @@
                 getDomNode: function() {
                     const buttonsContainer = document.createElement('div');
                     buttonsContainer.className = 'suggestion-buttons visible';
+                    
+                    // 动态设置宽度为编辑器宽度
+                    setSuggestionButtonWidth(buttonsContainer);
                     
                     // 接受按钮
                     const acceptBtn = document.createElement('button');
